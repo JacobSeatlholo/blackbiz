@@ -37,7 +37,6 @@ export default async function BusinessPage({ params }: PageProps) {
 
   if (!business || error) notFound()
 
-  // Increment view count (fire and forget)
   supabase.from('businesses').update({ view_count: (business.view_count || 0) + 1 }).eq('id', business.id)
 
   const { data: reviews } = await supabase
@@ -56,7 +55,6 @@ export default async function BusinessPage({ params }: PageProps) {
     <div className="min-h-screen bg-ink-900">
       <Navbar />
 
-      {/* Cover */}
       <div className="relative h-56 md:h-72 mt-16 overflow-hidden bg-ink-800">
         {business.cover_url ? (
           <Image src={business.cover_url} alt="" fill className="object-cover opacity-50" priority />
@@ -68,10 +66,7 @@ export default async function BusinessPage({ params }: PageProps) {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 -mt-16 relative pb-20">
         <div className="grid lg:grid-cols-3 gap-8">
-
-          {/* Left: main info */}
           <div className="lg:col-span-2">
-            {/* Profile header */}
             <div className="flex items-end gap-5 mb-6">
               <div className={`w-20 h-20 md:w-24 md:h-24 rounded-2xl border-4 border-ink-900 flex items-center justify-center font-display font-bold text-xl flex-shrink-0 shadow-xl ${
                 business.logo_url ? 'bg-white' : 'bg-gold-500 text-ink-900'
@@ -89,7 +84,7 @@ export default async function BusinessPage({ params }: PageProps) {
                     </span>
                   )}
                   {business.is_featured && (
-                    <span className="badge-gold text-xs">⭐ Featured</span>
+                    <span className="badge-gold text-xs">Featured</span>
                   )}
                 </div>
                 {business.tagline && (
@@ -98,7 +93,6 @@ export default async function BusinessPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Breadcrumb */}
             <div className="flex items-center gap-1.5 text-xs text-ink-500 mb-6">
               <Link href="/directory" className="hover:text-gold-400 transition-colors">Directory</Link>
               <ChevronRight size={12} />
@@ -108,7 +102,6 @@ export default async function BusinessPage({ params }: PageProps) {
               <span className="text-ink-400">{business.name}</span>
             </div>
 
-            {/* Quick stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
               {[
                 { icon: Star, label: 'Rating', value: business.rating_average > 0 ? `${business.rating_average.toFixed(1)}/5` : 'No reviews' },
@@ -127,7 +120,6 @@ export default async function BusinessPage({ params }: PageProps) {
               })}
             </div>
 
-            {/* About */}
             {business.description && (
               <section className="mb-8">
                 <h2 className="font-display text-lg font-semibold text-white mb-3">About</h2>
@@ -135,45 +127,41 @@ export default async function BusinessPage({ params }: PageProps) {
               </section>
             )}
 
-            {/* Services */}
             {business.services?.length > 0 && (
               <section className="mb-8">
                 <h2 className="font-display text-lg font-semibold text-white mb-3">Services</h2>
                 <div className="flex flex-wrap gap-2">
-                  {business.services.map(s => (
+                  {(business.services as string[]).map((s: string) => (
                     <span key={s} className="badge-gray">{s}</span>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Products */}
             {business.products?.length > 0 && (
               <section className="mb-8">
                 <h2 className="font-display text-lg font-semibold text-white mb-3">Products</h2>
                 <div className="flex flex-wrap gap-2">
-                  {business.products.map(p => (
+                  {(business.products as string[]).map((p: string) => (
                     <span key={p} className="badge-blue">{p}</span>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Certifications */}
             {business.certifications?.length > 0 && (
               <section className="mb-8">
                 <h2 className="font-display text-lg font-semibold text-white mb-3 flex items-center gap-2">
                   <Award size={16} className="text-gold-400" /> Certifications
                 </h2>
                 <div className="flex flex-wrap gap-2">
-                  {business.certifications.map(c => (
+                  {(business.certifications as string[]).map((c: string) => (
                     <span key={c} className="badge-gold">{c}</span>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Reviews */}
             <ReviewSection
               businessId={business.id}
               reviews={(reviews || []) as Review[]}
@@ -181,9 +169,7 @@ export default async function BusinessPage({ params }: PageProps) {
             />
           </div>
 
-          {/* Right: sidebar */}
           <aside className="space-y-5">
-            {/* Contact card */}
             <div className="card p-5">
               <h3 className="font-display font-semibold text-white mb-4 text-sm uppercase tracking-wider">Contact</h3>
               <div className="space-y-3">
@@ -217,7 +203,6 @@ export default async function BusinessPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Business details */}
             <div className="card p-5">
               <h3 className="font-display font-semibold text-white mb-4 text-sm uppercase tracking-wider">Details</h3>
               <div className="space-y-2.5">
@@ -238,15 +223,11 @@ export default async function BusinessPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Profile completeness */}
             <div className="card p-5">
-              <h3 className="font-display font-semibold text-white mb-3 text-sm uppercase tracking-wider">
-                Profile Strength
-              </h3>
+              <h3 className="font-display font-semibold text-white mb-3 text-sm uppercase tracking-wider">Profile Strength</h3>
               <CompletenessBar score={business.profile_completeness} />
             </div>
 
-            {/* Rating breakdown */}
             {business.rating_count > 0 && (
               <div className="card p-5">
                 <h3 className="font-display font-semibold text-white mb-4 text-sm uppercase tracking-wider">Rating</h3>
