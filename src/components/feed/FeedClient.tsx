@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   MessageSquare, Heart, Trophy, FileText, Search,
-  Newspaper, ArrowRight, Send, ChevronDown, Flame, X
+  Newspaper, ArrowRight, Send, ChevronDown, Flame, X, Building2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
