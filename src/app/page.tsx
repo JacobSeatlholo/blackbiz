@@ -2,14 +2,9 @@ import Link from 'next/link'
 import { Search, TrendingUp, Shield, Star, ArrowRight, Building2, Users, Zap } from 'lucide-react'
 import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
+import HustleFeedPreview from '@/components/feed/HustleFeedPreview'
 import { CATEGORIES, CATEGORY_ICONS } from '@/lib/utils'
-
-const STATS = [
-  { label: 'Registered Businesses', value: '0', suffix: ' — Be First' },
-  { label: 'Provinces Covered', value: '9', suffix: '' },
-  { label: 'Categories', value: '15', suffix: '' },
-  { label: 'Verifications', value: '0', suffix: ' — Join Now' },
-]
+import { createClient } from '@/lib/supabase/server'
 
 const FEATURES = [
   {
@@ -38,7 +33,26 @@ const FEATURES = [
   },
 ]
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = createClient()
+
+  const { count: bizCount } = await supabase
+    .from('businesses')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_active', true)
+
+  const { count: verifiedCount } = await supabase
+    .from('businesses')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_verified', true)
+
+  const STATS = [
+    { label: 'Registered Businesses', value: bizCount?.toString() ?? '0', suffix: bizCount ? '+' : ' — Be First' },
+    { label: 'Provinces Covered', value: '9', suffix: '' },
+    { label: 'Categories', value: '15', suffix: '' },
+    { label: 'Verifications', value: verifiedCount?.toString() ?? '0', suffix: verifiedCount ? '+' : ' — Join Now' },
+  ]
+
   return (
     <div className="min-h-screen bg-ink-900">
       <Navbar />
@@ -131,8 +145,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* Hustle Feed Preview */}
       <section className="py-20 bg-ink-800/30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <HustleFeedPreview />
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-14">
             <h2 className="section-title mb-3">More than a directory</h2>
