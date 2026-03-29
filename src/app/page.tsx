@@ -4,6 +4,7 @@ import Navbar from '@/components/layout/Navbar'
 import Footer from '@/components/layout/Footer'
 import HustleFeedPreview from '@/components/feed/HustleFeedPreview'
 import { CATEGORIES, CATEGORY_ICONS } from '@/lib/utils'
+import WelcomeModal from '@/components/ui/WelcomeModal'
 import { createClient } from '@/lib/supabase/server'
 
 const FEATURES = [
@@ -28,6 +29,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-ink-900">
       <Navbar />
+<WelcomeModal />
       <section className="relative pt-24 pb-20 overflow-hidden">
         <div className="absolute inset-0 bg-noise opacity-50" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full" style={{ background: 'radial-gradient(ellipse, rgba(201,149,42,0.08) 0%, transparent 70%)' }} />
