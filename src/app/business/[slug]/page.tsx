@@ -73,17 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 // ── Generate static params for top businesses ───────────────────────────────
-export async function generateStaticParams() {
-  const supabase = createClient()
-  const { data } = await supabase
-    .from('businesses')
-    .select('slug')
-    .eq('is_active', true)
-    .order('view_count', { ascending: false })
-    .limit(100)
-
-  return (data ?? []).map(b => ({ slug: b.slug }))
-}
+export const dynamic = 'force-dynamic'
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default async function BusinessPage({ params }: Props) {
