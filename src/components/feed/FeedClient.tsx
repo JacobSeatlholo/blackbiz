@@ -357,7 +357,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
 
           <button
             onClick={() => {
-              navigator.clipboard?.writeText(`https://blackbiz.vercel.app/feed`)
+              navigator.clipboard?.writeText(`https://blackbiz.co.za/feed`)
               toast.success('Link copied!')
             }}
             className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg text-ink-500 hover:text-ink-300 hover:bg-ink-800 transition-all ml-auto">
