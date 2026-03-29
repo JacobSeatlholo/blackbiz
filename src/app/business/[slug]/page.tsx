@@ -317,7 +317,7 @@ export default async function BusinessPage({ params }: Props) {
                 <h2 className="font-display text-lg font-semibold text-white mb-4">
                   Reviews ({biz.rating_count ?? 0})
                 </h2>
-                <ReviewSection businessId={biz.id} reviews={reviews ?? []} rating={biz.rating_average} />
+                <ReviewSection businessId={biz.id} reviews={reviews ?? []} />
               </div>
             </div>
 
