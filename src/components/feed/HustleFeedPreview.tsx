@@ -17,7 +17,7 @@ interface Post {
     name: string
     slug: string
     city: string
-    is_verified: boolean
+    verification_status: string
   } | null
 }
 
@@ -63,7 +63,7 @@ function PostCard({ post }: { post: Post }) {
           </div>
           <span className="text-xs text-ink-400">
             {post.businesses.name}
-            {post.businesses.is_verified && <span className="text-gold-400 ml-1">✓</span>}
+            {post.businesses.verification_status === 'verified' && <span className="text-gold-400 ml-1">✓</span>}
           </span>
           <span className="text-ink-600 text-xs">·</span>
           <span className="text-xs text-ink-500">{timeAgo(post.created_at)}</span>
@@ -116,7 +116,7 @@ export default async function HustleFeedPreview() {
 
   const { data } = await supabase
     .from('hustle_posts')
-    .select('*, businesses(name, slug, city, is_verified)')
+    .select('*, businesses(name, slug, city, verification_status)')
     .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(3)
