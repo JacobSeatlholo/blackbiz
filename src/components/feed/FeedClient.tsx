@@ -114,9 +114,10 @@ const payload = {
       .select('*, businesses(name, slug, city, province, category, is_verified)')
       .single()
 
-    if (error) {
-      toast.error('Failed to post. Try again.')
-    } else {
+  if (error) {
+  toast.error(error.message)
+  console.error('Post error:', error)
+} else {
       onPost(data as Post)
       toast.success('Posted to Hustle Feed! 🔥')
       setTitle(''); setBody(''); setBudget(''); setDeadline(''); setLocation('')
