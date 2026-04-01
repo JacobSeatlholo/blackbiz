@@ -91,15 +91,22 @@ function PostComposer({ onPost }: { onPost: (p: Post) => void }) {
       return
     }
 
-    const payload = {
-      post_type: type,
-      title: title || null,
-      body: body.trim(),
-      budget_range: budget || null,
-      deadline: deadline || null,
-      location: location || null,
-      author_id: user.id,
-    }
+ const { data: bizData } = await supabase
+  .from('businesses')
+  .select('id')
+  .eq('owner_id', user.id)
+  .single()
+
+const payload = {
+  post_type: type,
+  title: title || null,
+  body: body.trim(),
+  budget_range: budget || null,
+  deadline: deadline || null,
+  location: location || null,
+  author_id: user.id,
+  business_id: bizData?.id ?? null,
+}
 
     const { data, error } = await supabase
       .from('hustle_posts')
