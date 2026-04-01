@@ -33,7 +33,7 @@ interface Post {
     city: string
     province: string
     category: string
-    is_verified: boolean
+    verification_status: string
   } | null
 }
 
@@ -111,7 +111,7 @@ const payload = {
     const { data, error } = await supabase
       .from('hustle_posts')
       .insert(payload)
-      .select('*, businesses(name, slug, city, province, category, is_verified)')
+      .select('*, businesses(name, slug, city, province, category, verification_status)')
       .single()
 
   if (error) {
@@ -426,7 +426,7 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
 
     let q = supabase
       .from('hustle_posts')
-      .select('*, businesses(name, slug, city, province, category, is_verified)')
+      .select('*, businesses(name, slug, city, province, category, verification_status)')
       .eq('is_active', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -451,7 +451,7 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
     const supabase = createClient()
     let q = supabase
       .from('hustle_posts')
-      .select('*, businesses(name, slug, city, province, category, is_verified)')
+      .select('*, businesses(name, slug, city, province, category, verification_status)')
       .eq('is_active', true)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
