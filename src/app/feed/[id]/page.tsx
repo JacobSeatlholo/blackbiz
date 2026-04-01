@@ -76,7 +76,7 @@ export default async function FeedPostPage({ params }: Props) {
 
   const { data: post, error } = await supabase
     .from('hustle_posts')
-    .select('*, businesses(name, slug, city, province, category, is_verified)')
+    .select('*, businesses(name, slug, city, province, category, verification_status)')
     .eq('id', params.id)
     .eq('is_active', true)
     .single()
@@ -159,7 +159,7 @@ export default async function FeedPostPage({ params }: Props) {
                       <div>
                         <div className="text-sm font-semibold text-white group-hover:text-gold-400 transition-colors">
                           {biz.name}
-                          {biz.is_verified && <span className="text-gold-400 ml-1 text-xs">✓</span>}
+                          {biz.verification_status === 'verified' && <span className="text-gold-400 ml-1 text-xs">✓</span>}
                         </div>
                         <div className="text-xs text-ink-500">{biz.city}, {biz.province}</div>
                       </div>

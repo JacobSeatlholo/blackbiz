@@ -16,7 +16,7 @@ export default async function FeedPage() {
   // Initial load — most recent 10
   const { data, count } = await supabase
     .from('hustle_posts')
-    .select('*, businesses(name, slug, city, province, category, is_verified)', { count: 'exact' })
+    .select('*, businesses(name, slug, city, province, category, verification_status)', { count: 'exact' })
     .eq('is_active', true)
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
