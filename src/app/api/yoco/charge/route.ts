@@ -2,77 +2,68 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const YOCO_SECRET_KEY = process.env.YOCO_SECRET_KEY!
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.blackbiz.co.za'
 
-const PLANS: Record<string, string> = {
-  verified: 'verified',
-  intelligence: 'verified',
+const PLAN_AMOUNTS: Record<string, number> = {
+  verified:     29900, // R299 in cents
+  intelligence: 99900, // R999 in cents
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, amountInCents, currency, user_id, business_id, plan } = await req.json()
+    const { plan, user_id, business_id, business_name } = await req.json()
 
-    if (!token || !amountInCents || !user_id || !plan) {
+    if (!plan || !user_id) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Charge via Yoco API
-    const chargeRes = await fetch('https://online.yoco.com/v1/charges/', {
+    const amount = PLAN_AMOUNTS[plan]
+    if (!amount) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    }
+
+    // Create Yoco checkout session
+    const res = await fetch('https://payments.yoco.com/api/checkouts', {
       method: 'POST',
       headers: {
-        'X-Auth-Secret-Key': YOCO_SECRET_KEY,
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${YOCO_SECRET_KEY}`,
+        'Idempotency-Key': `${user_id}-${plan}-${Date.now()}`,
       },
       body: JSON.stringify({
-        token,
-        amountInCents,
-        currency: currency ?? 'ZAR',
-        metadata: { user_id, business_id, plan },
+        amount,
+        currency: 'ZAR',
+        successUrl: `${BASE_URL}/dashboard?payment=success&plan=${plan}`,
+        cancelUrl: `${BASE_URL}/pricing?payment=cancelled`,
+        failureUrl: `${BASE_URL}/pricing?payment=failed`,
+        metadata: {
+          user_id,
+          business_id: business_id ?? '',
+          plan,
+          business_name: business_name ?? '',
+        },
       }),
     })
 
-    const charge = await chargeRes.json()
+    const checkout = await res.json()
 
-    if (charge.status !== 'successful') {
+    if (!res.ok) {
+      console.error('Yoco checkout error:', checkout)
       return NextResponse.json(
-        { error: charge.displayMessage ?? 'Payment failed' },
-        { status: 400 }
+        { error: checkout.message ?? 'Failed to create checkout' },
+        { status: res.status }
       )
     }
 
-    // Payment successful — upgrade the business
-    const supabase = createClient()
-
-    const { error } = await supabase
-      .from('businesses')
-      .update({
-        verification_status: PLANS[plan],
-        subscription_tier: plan,
-        subscription_start: new Date().toISOString(),
-        subscription_payment_id: charge.id,
-      })
-      .eq('owner_id', user_id)
-
-    if (error) {
-      console.error('Supabase update error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    // Log payment
-    await supabase.from('payments').insert({
-      user_id,
-      business_id: business_id ?? null,
-      payment_id: charge.id,
-      plan,
-      amount_cents: amountInCents,
-      currency: currency ?? 'ZAR',
-      status: 'succeeded',
+    // Return redirect URL to client
+    return NextResponse.json({
+      success: true,
+      redirectUrl: checkout.redirectUrl,
+      checkoutId: checkout.id,
     })
 
-    return NextResponse.json({ success: true, charge_id: charge.id })
-
   } catch (err) {
-    console.error('Charge error:', err)
+    console.error('Checkout error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }

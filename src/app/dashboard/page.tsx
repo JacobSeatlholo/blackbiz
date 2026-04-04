@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/components/layout/Navbar'
 import CompletenessBar from '@/components/business/CompletenessBar'
 import { timeAgo } from '@/lib/utils'
+import PaymentSuccessToast from '@/components/ui/PaymentSuccessToast'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -28,6 +29,8 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-ink-900">
       <Navbar />
+<PaymentSuccessToast />
+
       <main className="pt-20 pb-20 max-w-6xl mx-auto px-4 sm:px-6">
 
         {/* Header */}
