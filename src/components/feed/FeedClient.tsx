@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   MessageSquare, Heart, Trophy, FileText, Search,
-  Newspaper, ArrowRight, Send, ChevronDown, Flame, X, Building2
+  Newspaper, ArrowRight, Send, ChevronDown, Flame, X, Building2,
+  Video, Radio, Upload, Play
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,6 +22,8 @@ interface Post {
   budget_range: string | null
   deadline: string | null
   location: string | null
+  video_url: string | null
+  is_live: boolean
   like_count: number
   comment_count: number
   view_count: number
@@ -68,16 +71,55 @@ function timeAgo(date: string) {
 
 // ── Post Composer ─────────────────────────────────────────────
 function PostComposer({ onPost }: { onPost: (p: Post) => void }) {
-  const [open, setOpen]         = useState(false)
-  const [type, setType]         = useState<typeof POST_TYPES[number]>('update')
-  const [title, setTitle]       = useState('')
-  const [body, setBody]         = useState('')
-  const [budget, setBudget]     = useState('')
-  const [deadline, setDeadline] = useState('')
-  const [location, setLocation] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [open, setOpen]           = useState(false)
+  const [type, setType]           = useState<typeof POST_TYPES[number]>('update')
+  const [title, setTitle]         = useState('')
+  const [body, setBody]           = useState('')
+  const [budget, setBudget]       = useState('')
+  const [deadline, setDeadline]   = useState('')
+  const [location, setLocation]   = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isVerified, setIsVerified] = useState(false)
+  const [goLive, setGoLive]       = useState(false)
+  const fileRef                   = useRef<HTMLInputElement>(null)
 
   const needsExtra = type === 'tender' || type === 'rfq'
+
+  // Check verified status when composer opens
+  const handleOpen = async () => {
+    setOpen(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase
+        .from('businesses')
+        .select('verification_status')
+        .eq('owner_id', user.id)
+        .single()
+      setIsVerified(data?.verification_status === 'verified')
+    }
+  }
+
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Video must be under 50MB')
+      return
+    }
+    setVideoFile(file)
+    setVideoPreview(URL.createObjectURL(file))
+  }
+
+  const removeVideo = () => {
+    setVideoFile(null)
+    setVideoPreview(null)
+    setUploadProgress(0)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const submit = async () => {
     if (!body.trim()) return
@@ -91,22 +133,45 @@ function PostComposer({ onPost }: { onPost: (p: Post) => void }) {
       return
     }
 
- const { data: bizData } = await supabase
-  .from('businesses')
-  .select('id')
-  .eq('owner_id', user.id)
-  .single()
+    const { data: bizData } = await supabase
+      .from('businesses')
+      .select('id, verification_status')
+      .eq('owner_id', user.id)
+      .single()
 
-const payload = {
-  post_type: type,
-  title: title || null,
-  body: body.trim(),
-  budget_range: budget || null,
-  deadline: deadline || null,
-  location: location || null,
-  author_id: user.id,
-  business_id: bizData?.id ?? null,
-}
+    // Upload video if attached
+    let video_url: string | null = null
+    if (videoFile) {
+      toast.loading('Uploading video…', { id: 'upload' })
+      const ext = videoFile.name.split('.').pop()
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('feed-videos')
+        .upload(path, videoFile, { cacheControl: '3600', upsert: false })
+
+      if (uploadError) {
+        toast.error('Video upload failed: ' + uploadError.message, { id: 'upload' })
+        setLoading(false)
+        return
+      }
+
+      const { data: urlData } = supabase.storage.from('feed-videos').getPublicUrl(path)
+      video_url = urlData.publicUrl
+      toast.success('Video uploaded!', { id: 'upload' })
+    }
+
+    const payload = {
+      post_type: type,
+      title: title || null,
+      body: body.trim(),
+      budget_range: budget || null,
+      deadline: deadline || null,
+      location: location || null,
+      author_id: user.id,
+      business_id: bizData?.id ?? null,
+      video_url,
+      is_live: goLive && bizData?.verification_status === 'verified',
+    }
 
     const { data, error } = await supabase
       .from('hustle_posts')
@@ -114,20 +179,20 @@ const payload = {
       .select('*, businesses(name, slug, city, province, category, verification_status)')
       .single()
 
-  if (error) {
-  toast.error(error.message)
-  console.error('Post error:', error)
-} else {
+    if (error) {
+      toast.error(error.message)
+    } else {
       onPost(data as Post)
-      toast.success('Posted to Hustle Feed! 🔥')
-      setTitle(''); setBody(''); setBudget(''); setDeadline(''); setLocation('')
+      toast.success(goLive ? 'You\'re live! 🔴' : 'Posted to Hustle Feed! 🔥')
+      setTitle(''); setBody(''); setBudget(''); setDeadline('')
+      setLocation(''); setVideoFile(null); setVideoPreview(null); setGoLive(false)
       setOpen(false)
     }
     setLoading(false)
   }
 
   if (!open) return (
-    <button onClick={() => setOpen(true)}
+    <button onClick={handleOpen}
       className="card w-full p-4 flex items-center gap-3 text-left hover:border-gold-500/30 transition-all mb-6 cursor-text">
       <div className="w-9 h-9 rounded-lg bg-gold-500/10 border border-gold-500/20 flex items-center justify-center text-gold-400 flex-shrink-0">
         ✏️
@@ -179,7 +244,7 @@ const payload = {
         className="input mb-3 text-sm resize-none"
       />
 
-      {/* Extra fields */}
+      {/* Extra fields for tender/rfq */}
       {needsExtra && (
         <div className="grid grid-cols-3 gap-3 mb-3">
           {[
@@ -196,16 +261,75 @@ const payload = {
         </div>
       )}
 
+      {/* Video upload */}
+      <div className="mb-3">
+        {videoPreview ? (
+          <div className="relative rounded-lg overflow-hidden bg-ink-900 border border-ink-700">
+            <video src={videoPreview} controls className="w-full max-h-48 object-contain" />
+            <button onClick={removeVideo}
+              className="absolute top-2 right-2 bg-ink-900/80 border border-ink-700 text-ink-300 hover:text-white rounded-full w-7 h-7 flex items-center justify-center transition-colors">
+              <X size={14} />
+            </button>
+            <div className="px-3 py-2 text-xs text-ink-500 flex items-center gap-2">
+              <Video size={12} /> {videoFile?.name} · {((videoFile?.size ?? 0) / 1024 / 1024).toFixed(1)}MB
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => fileRef.current?.click()}
+            className="w-full border border-dashed border-ink-600 hover:border-gold-500/40 rounded-lg p-4 flex items-center justify-center gap-2 text-sm text-ink-500 hover:text-ink-300 transition-all">
+            <Upload size={15} /> Attach a video (MP4, MOV, WebM — max 50MB)
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="video/mp4,video/webm,video/quicktime"
+          onChange={handleVideoSelect} className="hidden" />
+      </div>
+
+      {/* Go Live — verified members only */}
+      <div className={`mb-4 p-3 rounded-lg border transition-all ${
+        isVerified
+          ? 'border-red-500/20 bg-red-500/5 cursor-pointer'
+          : 'border-ink-700 bg-ink-800/50 cursor-not-allowed opacity-60'
+      }`} onClick={() => isVerified && setGoLive(!goLive)}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Radio size={15} className={isVerified ? 'text-red-400' : 'text-ink-600'} />
+            <div>
+              <div className={`text-xs font-semibold ${isVerified ? 'text-red-400' : 'text-ink-600'}`}>
+                Go Live 🔴
+              </div>
+              <div className="text-xs text-ink-600">
+                {isVerified
+                  ? 'Broadcast this post as a live update to your followers'
+                  : 'Verified members only — upgrade to go live'}
+              </div>
+            </div>
+          </div>
+          {isVerified && (
+            <div className={`w-10 h-5 rounded-full border transition-all ${
+              goLive ? 'bg-red-500 border-red-500' : 'bg-ink-700 border-ink-600'
+            }`}>
+              <div className={`w-3.5 h-3.5 rounded-full bg-white mt-0.5 transition-all ${
+                goLive ? 'ml-5' : 'ml-0.5'
+              }`} />
+            </div>
+          )}
+          {!isVerified && (
+            <Link href="/pricing" className="text-xs text-gold-400 hover:underline flex-shrink-0">
+              Upgrade →
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-ink-600">{body.length}/1000</span>
         <div className="flex gap-2">
-          <button onClick={() => setOpen(false)} className="btn-secondary text-sm py-2">
-            Cancel
-          </button>
+          <button onClick={() => setOpen(false)} className="btn-secondary text-sm py-2">Cancel</button>
           <button onClick={submit} disabled={!body.trim() || loading}
             className={`btn-primary text-sm py-2 gap-1.5 ${!body.trim() ? 'opacity-40 cursor-not-allowed' : ''}`}>
-            <Send size={14} />
-            {loading ? 'Posting…' : 'Post'}
+            {goLive ? <><Radio size={13} /> Go Live</> : <><Send size={14} /> Post</>}
+            {loading && '…'}
           </button>
         </div>
       </div>
@@ -241,21 +365,23 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { toast.error('Sign in to comment'); return }
-
-    await supabase.from('hustle_comments').insert({
-      post_id: post.id,
-      author_id: user.id,
-      body: comment.trim(),
-    })
-
+    await supabase.from('hustle_comments').insert({ post_id: post.id, author_id: user.id, body: comment.trim() })
     setLocalComments(c => [...c, { id: crypto.randomUUID(), body: comment.trim(), created_at: new Date().toISOString() }])
     setComment('')
   }
 
   return (
     <div className="card overflow-hidden mb-4 hover:border-ink-600 transition-all">
-      {/* Accent bar */}
       <div className="h-0.5 w-full" style={{ background: `linear-gradient(90deg, ${config.accentColor}, transparent)` }} />
+
+      {/* Live badge */}
+      {post.is_live && (
+        <div className="flex items-center gap-2 px-5 pt-3">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-full animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> LIVE
+          </span>
+        </div>
+      )}
 
       <div className="p-5">
         {/* Header */}
@@ -268,9 +394,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
                 </div>
               </Link>
             ) : (
-              <div className="w-9 h-9 rounded-lg bg-ink-700 flex items-center justify-center text-ink-400 flex-shrink-0">
-                👤
-              </div>
+              <div className="w-9 h-9 rounded-lg bg-ink-700 flex items-center justify-center text-ink-400 flex-shrink-0">👤</div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -281,9 +405,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
                 ) : (
                   <span className="font-display text-sm font-semibold text-white">Anonymous</span>
                 )}
-                {post.is_verified_post && (
-                  <span className="text-xs text-gold-400 font-medium flex-shrink-0">✓</span>
-                )}
+                {post.is_verified_post && <span className="text-xs text-gold-400 font-medium flex-shrink-0">✓</span>}
               </div>
               <div className="text-xs text-ink-500 flex items-center gap-1.5">
                 {biz && <span>{biz.city}</span>}
@@ -292,7 +414,6 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
               </div>
             </div>
           </div>
-
           <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border flex-shrink-0 ${config.badgeClasses}`}>
             {config.label}
           </span>
@@ -300,9 +421,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
 
         {/* Title */}
         {post.title && (
-          <h3 className="font-display text-base font-semibold text-white mb-2 leading-snug">
-            {post.title}
-          </h3>
+          <h3 className="font-display text-base font-bold text-white mb-2 leading-snug">{post.title}</h3>
         )}
 
         {/* Body */}
@@ -314,6 +433,21 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
             </button>
           )}
         </p>
+
+        {/* Video player */}
+        {post.video_url && (
+          <div className="mb-4 rounded-lg overflow-hidden bg-ink-900 border border-ink-700">
+            <video
+              src={post.video_url}
+              controls
+              preload="metadata"
+              poster={undefined}
+              className="w-full max-h-64 object-contain"
+            >
+              Your browser does not support video playback.
+            </video>
+          </div>
+        )}
 
         {/* Tender/RFQ extras */}
         {(post.post_type === 'tender' || post.post_type === 'rfq') && (
@@ -339,10 +473,8 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
         {/* Tags */}
         {post.tags?.length > 0 && (
           <div className="flex gap-2 flex-wrap mb-3">
-            {post.tags.slice(0, 5).map(tag => (
-              <span key={tag} className="text-xs text-ink-600 hover:text-ink-400 cursor-pointer transition-colors">
-                #{tag}
-              </span>
+            {post.tags.slice(0, 5).map((tag: string) => (
+              <span key={tag} className="text-xs text-ink-600">#{tag}</span>
             ))}
           </div>
         )}
@@ -364,10 +496,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
           </button>
 
           <button
-            onClick={() => {
-              navigator.clipboard?.writeText(`https://blackbiz.co.za/feed`)
-              toast.success('Link copied!')
-            }}
+            onClick={() => { navigator.clipboard?.writeText(`https://www.blackbiz.co.za/feed/${post.id}`); toast.success('Link copied!') }}
             className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg text-ink-500 hover:text-ink-300 hover:bg-ink-800 transition-all ml-auto">
             <ArrowRight size={14} /> Share
           </button>
@@ -380,8 +509,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
               <input value={comment} onChange={e => setComment(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
                 placeholder="Write a comment… (Enter to post)"
-                className="input text-sm flex-1 py-2"
-              />
+                className="input text-sm flex-1 py-2" />
               <button onClick={submitComment} disabled={!comment.trim()}
                 className="btn-primary text-sm py-2 px-3 flex-shrink-0">
                 <Send size={14} />
@@ -402,7 +530,7 @@ function PostCard({ post, onLike }: { post: Post; onLike: (id: string) => void }
   )
 }
 
-// ── Main Client Component ─────────────────────────────────────
+// ── Main Client ───────────────────────────────────────────────
 interface Props {
   initialPosts: Post[]
   totalCount: number
@@ -423,7 +551,6 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
     setLoading(true)
     const supabase = createClient()
     const nextPage = page + 1
-
     let q = supabase
       .from('hustle_posts')
       .select('*, businesses(name, slug, city, province, category, verification_status)')
@@ -447,7 +574,6 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
     setLoading(true)
     setFilter(newFilter)
     setPage(1)
-
     const supabase = createClient()
     let q = supabase
       .from('hustle_posts')
@@ -477,32 +603,25 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
   return (
     <div className="pt-10">
       <div className="grid lg:grid-cols-[1fr_280px] gap-8 items-start">
-
-        {/* ── Main column ──────────────────────────────────── */}
         <div>
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="font-display text-3xl font-bold text-white">Hustle Feed</h1>
               <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
               </span>
             </div>
-            <p className="text-ink-400 text-sm">
-              Updates, tenders, milestones and opinions from verified Black-owned businesses
-            </p>
+            <p className="text-ink-400 text-sm">Updates, tenders, milestones and opinions from verified Black-owned businesses</p>
           </div>
 
           {/* Search */}
           <div className="relative mb-4">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-500" />
-            <input
-              value={search}
+            <input value={search}
               onChange={e => { setSearch(e.target.value); applyFilter(filter, e.target.value) }}
               placeholder="Search posts, tenders, opportunities…"
-              className="input pl-10 pr-8 text-sm"
-            />
+              className="input pl-10 pr-8 text-sm" />
             {search && (
               <button onClick={() => { setSearch(''); applyFilter(filter, '') }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-500 hover:text-ink-300">
@@ -511,7 +630,7 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
             )}
           </div>
 
-          {/* Filter tabs */}
+          {/* Filters */}
           <div className="flex gap-2 flex-wrap mb-6">
             {FILTERS.map(f => {
               const Icon = f.icon
@@ -520,8 +639,7 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
                   className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all
                     ${filter === f.value
                       ? 'bg-gold-500/10 border-gold-500/30 text-gold-400'
-                      : 'border-ink-700 text-ink-500 hover:border-ink-500 hover:text-ink-300'
-                    }`}>
+                      : 'border-ink-700 text-ink-500 hover:border-ink-500 hover:text-ink-300'}`}>
                   <Icon size={11} /> {f.label}
                 </button>
               )
@@ -539,7 +657,6 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
                   <div className="h-3 bg-ink-700 rounded w-1/4 mb-3" />
                   <div className="h-4 bg-ink-700 rounded w-3/4 mb-2" />
                   <div className="h-3 bg-ink-700 rounded w-full mb-1" />
-                  <div className="h-3 bg-ink-700 rounded w-5/6" />
                 </div>
               ))}
             </div>
@@ -551,10 +668,7 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
             </div>
           ) : (
             <>
-              {posts.map(post => (
-                <PostCard key={post.id} post={post} onLike={handleLike} />
-              ))}
-
+              {posts.map(post => <PostCard key={post.id} post={post} onLike={handleLike} />)}
               {hasMore && (
                 <button onClick={fetchMore} disabled={loading}
                   className="btn-secondary w-full justify-center gap-2 mt-2">
@@ -566,10 +680,8 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
           )}
         </div>
 
-        {/* ── Sidebar ──────────────────────────────────────── */}
+        {/* Sidebar */}
         <div className="space-y-4 sticky top-24">
-
-          {/* Stats */}
           <div className="card p-5">
             <h3 className="font-display text-sm font-semibold text-white mb-4">Feed Stats</h3>
             {[
@@ -585,7 +697,6 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
             ))}
           </div>
 
-          {/* Post type guide */}
           <div className="card p-5">
             <h3 className="font-display text-sm font-semibold text-white mb-4">Post Types</h3>
             {[
@@ -605,7 +716,19 @@ export default function FeedClient({ initialPosts, totalCount, tenderCount, rfqC
             ))}
           </div>
 
-          {/* List CTA */}
+          {/* Live CTA — verified only */}
+          <div className="card p-5 border-red-500/20 bg-red-500/5">
+            <div className="flex items-center gap-2 mb-2">
+              <Radio size={14} className="text-red-400" />
+              <h3 className="font-display text-sm font-semibold text-white">Go Live</h3>
+              <span className="text-xs bg-gold-500/10 border border-gold-500/20 text-gold-400 px-2 py-0.5 rounded-full">Verified</span>
+            </div>
+            <p className="text-xs text-ink-400 mb-3">Broadcast live updates to the BlackBiz community. Verified members only.</p>
+            <Link href="/pricing" className="btn-primary text-xs w-full justify-center py-2">
+              Upgrade to Verified →
+            </Link>
+          </div>
+
           <div className="card p-5 text-center border-gold-500/20">
             <Building2 size={28} className="text-gold-400 mx-auto mb-3" />
             <p className="font-display text-sm font-semibold text-white mb-1">List your business</p>
