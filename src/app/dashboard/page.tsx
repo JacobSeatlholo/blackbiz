@@ -97,7 +97,7 @@ export default async function DashboardPage() {
                         <span className="flex items-center gap-1"><Star size={11} /> {biz.rating_average?.toFixed(1) || '—'} rating</span>
                         <span>Listed {timeAgo(biz.created_at)}</span>
 {businesses?.some(b => b.verification_status === 'verified') && (
-  <GoLiveDashboard />
+  <GoLiveDashboard businessSlug={biz.slug} businessId={biz.id} />
 )}
                       </div>
                     </div>
