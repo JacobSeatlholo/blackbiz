@@ -359,55 +359,6 @@ function PostComposer({ onPost }: { onPost: (p: Post) => void }) {
   )
 }
 
-  const [open, setOpen]           = useState(false)
-  const [type, setType]           = useState<typeof POST_TYPES[number]>('update')
-  const [title, setTitle]         = useState('')
-  const [body, setBody]           = useState('')
-  const [budget, setBudget]       = useState('')
-  const [deadline, setDeadline]   = useState('')
-  const [location, setLocation]   = useState('')
-  const [loading, setLoading]     = useState(false)
-  const [videoFile, setVideoFile] = useState<File | null>(null)
-  const [videoPreview, setVideoPreview] = useState<string | null>(null)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [isVerified, setIsVerified] = useState(false)
-  const [goLive, setGoLive]       = useState(false)
-  const fileRef                   = useRef<HTMLInputElement>(null)
-
-  const needsExtra = type === 'tender' || type === 'rfq'
-
-  // Check verified status when composer opens
-  const handleOpen = async () => {
-    setOpen(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data } = await supabase
-        .from('businesses')
-        .select('verification_status')
-        .eq('owner_id', user.id)
-        .single()
-      setIsVerified(data?.verification_status === 'verified')
-    }
-  }
-
-  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('Video must be under 50MB')
-      return
-    }
-    setVideoFile(file)
-    setVideoPreview(URL.createObjectURL(file))
-  }
-
-  const removeVideo = () => {
-    setVideoFile(null)
-    setVideoPreview(null)
-    setUploadProgress(0)
-    if (fileRef.current) fileRef.current.value = ''
-  }
 
 
 // ── Post Card ─────────────────────────────────────────────────
