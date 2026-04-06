@@ -4,6 +4,7 @@ import { Plus, Eye, Star, BarChart2, Shield, Settings, Edit } from 'lucide-react
 import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/components/layout/Navbar'
 import CompletenessBar from '@/components/business/CompletenessBar'
+import GoLiveDashboard from '@/components/live/GoLiveDashboard'
 import { timeAgo } from '@/lib/utils'
 import PaymentSuccessToast from '@/components/ui/PaymentSuccessToast'
 
