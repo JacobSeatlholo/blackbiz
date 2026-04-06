@@ -70,7 +70,295 @@ function timeAgo(date: string) {
 }
 
 // ── Post Composer ─────────────────────────────────────────────
+// REPLACE the entire PostComposer function in FeedClient.tsx
+// Find: "function PostComposer({ onPost }: { onPost: (p: Post) => void }) {"
+// Replace with the function below
+
 function PostComposer({ onPost }: { onPost: (p: Post) => void }) {
+  const [open, setOpen]             = useState(false)
+  const [type, setType]             = useState<typeof POST_TYPES[number]>('update')
+  const [title, setTitle]           = useState('')
+  const [body, setBody]             = useState('')
+  const [budget, setBudget]         = useState('')
+  const [deadline, setDeadline]     = useState('')
+  const [location, setLocation]     = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [videoFile, setVideoFile]   = useState<File | null>(null)
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+  const [isVerified, setIsVerified] = useState(false)
+  const [goLive, setGoLive]         = useState(false)
+  const [showExtra, setShowExtra]   = useState(false)
+  const fileRef                     = useRef<HTMLInputElement>(null)
+  const textRef                     = useRef<HTMLTextAreaElement>(null)
+
+  const needsExtra = type === 'tender' || type === 'rfq'
+
+  const handleOpen = async () => {
+    setOpen(true)
+    setTimeout(() => textRef.current?.focus(), 100)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data } = await supabase
+        .from('businesses')
+        .select('verification_status')
+        .eq('owner_id', user.id)
+        .single()
+      setIsVerified(data?.verification_status === 'verified')
+    }
+  }
+
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 50 * 1024 * 1024) { toast.error('Video must be under 50MB'); return }
+    setVideoFile(file)
+    setVideoPreview(URL.createObjectURL(file))
+  }
+
+  const removeVideo = () => {
+    setVideoFile(null)
+    setVideoPreview(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setTitle(''); setBody(''); setBudget(''); setDeadline('')
+    setLocation(''); setVideoFile(null); setVideoPreview(null)
+    setGoLive(false); setShowExtra(false); setType('update')
+  }
+
+  const submit = async () => {
+    if (!body.trim()) return
+    setLoading(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      toast.error('Sign in to post')
+      setLoading(false)
+      return
+    }
+
+    const { data: bizData } = await supabase
+      .from('businesses')
+      .select('id, verification_status')
+      .eq('owner_id', user.id)
+      .single()
+
+    let video_url: string | null = null
+    if (videoFile) {
+      toast.loading('Uploading video…', { id: 'upload' })
+      const ext = videoFile.name.split('.').pop()
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('feed-videos')
+        .upload(path, videoFile, { cacheControl: '3600', upsert: false })
+      if (uploadError) {
+        toast.error('Upload failed: ' + uploadError.message, { id: 'upload' })
+        setLoading(false)
+        return
+      }
+      const { data: urlData } = supabase.storage.from('feed-videos').getPublicUrl(path)
+      video_url = urlData.publicUrl
+      toast.success('Video uploaded!', { id: 'upload' })
+    }
+
+    const { data, error } = await supabase
+      .from('hustle_posts')
+      .insert({
+        post_type: type,
+        title: title || null,
+        body: body.trim(),
+        budget_range: budget || null,
+        deadline: deadline || null,
+        location: location || null,
+        author_id: user.id,
+        business_id: bizData?.id ?? null,
+        video_url,
+        is_live: goLive && bizData?.verification_status === 'verified',
+      })
+      .select('*, businesses(name, slug, city, province, category, verification_status)')
+      .single()
+
+    if (error) {
+      toast.error(error.message)
+    } else {
+      onPost(data as Post)
+      toast.success(goLive ? '🔴 You\'re live!' : '🔥 Posted!')
+      handleClose()
+    }
+    setLoading(false)
+  }
+
+  // ── Collapsed state ──────────────────────────────────────────
+  if (!open) return (
+    <button onClick={handleOpen}
+      className="w-full mb-6 flex items-center gap-3 p-4 rounded-xl bg-ink-800 border border-ink-700 hover:border-gold-500/30 transition-all text-left">
+      <div className="w-9 h-9 rounded-full bg-gold-500/10 border border-gold-500/20 flex items-center justify-center text-base flex-shrink-0">
+        ✏️
+      </div>
+      <span className="text-ink-500 text-sm flex-1">What's happening in your business?</span>
+      <span className="text-xs bg-gold-500 text-ink-900 font-bold px-3 py-1.5 rounded-full flex-shrink-0">Post</span>
+    </button>
+  )
+
+  // ── Expanded composer ────────────────────────────────────────
+  return (
+    <div className="mb-6 rounded-xl bg-ink-800 border border-ink-700 overflow-hidden animate-fade-up">
+
+      {/* Post type tabs */}
+      <div className="flex overflow-x-auto scrollbar-hide border-b border-ink-700 px-4 pt-3 gap-1 pb-0">
+        {POST_TYPES.map(pt => {
+          const config = TYPE_CONFIG[pt]
+          const icons: Record<string, string> = {
+            update: '📢', tender: '📋', rfq: '🔍', milestone: '🏆', opinion: '💬'
+          }
+          return (
+            <button key={pt} onClick={() => { setType(pt); setShowExtra(pt === 'tender' || pt === 'rfq') }}
+              className={`flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-t-lg border-b-2 transition-all whitespace-nowrap
+                ${type === pt
+                  ? 'border-gold-400 text-gold-400 bg-gold-500/5'
+                  : 'border-transparent text-ink-500 hover:text-ink-300'}`}>
+              {icons[pt]} {config.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="p-4">
+        {/* Title — only for tender/rfq/milestone/opinion */}
+        {type !== 'update' && (
+          <input value={title} onChange={e => setTitle(e.target.value)}
+            placeholder={
+              type === 'tender'    ? 'Tender title…' :
+              type === 'rfq'       ? 'What are you looking for?' :
+              type === 'milestone' ? 'Milestone headline…' :
+              'Your take in one sentence…'
+            }
+            className="w-full bg-transparent border-0 text-sm font-semibold text-white placeholder:text-ink-600 focus:outline-none mb-2"
+          />
+        )}
+
+        {/* Body */}
+        <textarea ref={textRef} value={body} onChange={e => setBody(e.target.value)}
+          rows={type === 'update' ? 4 : 3}
+          placeholder={
+            type === 'tender'    ? 'Describe scope, requirements, CIDB grade, deadline and how to submit…' :
+            type === 'rfq'       ? 'Describe what you need, volumes, timeline, and how suppliers should respond…' :
+            type === 'milestone' ? 'Tell the community about this win. Numbers, impact, gratitude. 🙏🏾' :
+            type === 'opinion'   ? 'Share your perspective. Invite the community to engage honestly…' :
+            'Share an update, news or announcement with the BlackBiz community…'
+          }
+          className="w-full bg-transparent border-0 text-sm text-ink-300 placeholder:text-ink-600 focus:outline-none resize-none leading-relaxed"
+        />
+
+        {/* Tender/RFQ extra fields */}
+        {(needsExtra && showExtra) && (
+          <div className="mt-3 pt-3 border-t border-ink-700 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-ink-500 mb-1 block">Budget Range</label>
+                <input value={budget} onChange={e => setBudget(e.target.value)}
+                  placeholder="e.g. R500K–R2M"
+                  className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-ink-300 focus:outline-none focus:border-gold-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-ink-500 mb-1 block">Closing Date</label>
+                <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
+                  className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-ink-300 focus:outline-none focus:border-gold-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-ink-500 mb-1 block">Location</label>
+                <input value={location} onChange={e => setLocation(e.target.value)}
+                  placeholder="e.g. Cape Town, WC"
+                  className="w-full bg-ink-900 border border-ink-700 rounded-lg px-3 py-2 text-xs text-ink-300 focus:outline-none focus:border-gold-500/50" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Video preview */}
+        {videoPreview && (
+          <div className="mt-3 relative rounded-lg overflow-hidden bg-ink-900 border border-ink-700">
+            <video src={videoPreview} controls className="w-full max-h-40 object-contain" />
+            <button onClick={removeVideo}
+              className="absolute top-2 right-2 bg-ink-900/90 border border-ink-700 rounded-full w-7 h-7 flex items-center justify-center text-ink-400 hover:text-white transition-colors">
+              <X size={13} />
+            </button>
+            <div className="px-3 py-1.5 text-xs text-ink-600 flex items-center gap-1.5">
+              <Video size={11} /> {videoFile?.name} · {((videoFile?.size ?? 0) / 1024 / 1024).toFixed(1)}MB
+            </div>
+          </div>
+        )}
+
+        {/* Go Live — ONLY shown for verified members */}
+        {isVerified && (
+          <div className="mt-3 pt-3 border-t border-ink-700">
+            <button onClick={() => setGoLive(!goLive)}
+              className={`flex items-center gap-2.5 w-full text-left transition-all rounded-lg px-3 py-2.5 ${
+                goLive ? 'bg-red-500/10 border border-red-500/20' : 'hover:bg-ink-700/50'
+              }`}>
+              <Radio size={15} className={goLive ? 'text-red-400' : 'text-ink-500'} />
+              <div className="flex-1">
+                <div className={`text-xs font-semibold ${goLive ? 'text-red-400' : 'text-ink-400'}`}>
+                  {goLive ? '🔴 Going Live' : 'Go Live'}
+                </div>
+                <div className="text-xs text-ink-600">
+                  {goLive ? 'This post will broadcast live to your followers' : 'Broadcast live to your community'}
+                </div>
+              </div>
+              <div className={`w-9 h-5 rounded-full transition-all flex-shrink-0 ${goLive ? 'bg-red-500' : 'bg-ink-700'}`}>
+                <div className={`w-3.5 h-3.5 rounded-full bg-white mt-0.5 transition-all ${goLive ? 'ml-5' : 'ml-0.5'}`} />
+              </div>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom toolbar */}
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-ink-700 bg-ink-900/50">
+        {/* Attach video */}
+        <button onClick={() => fileRef.current?.click()}
+          title="Attach video"
+          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+            videoFile ? 'bg-gold-500/10 border border-gold-500/20 text-gold-400' : 'text-ink-500 hover:text-ink-300 hover:bg-ink-700'
+          }`}>
+          <Video size={15} />
+        </button>
+        <input ref={fileRef} type="file" accept="video/mp4,video/webm,video/quicktime"
+          onChange={handleVideoSelect} className="hidden" />
+
+        {/* Char count */}
+        <span className={`text-xs ml-1 ${body.length > 900 ? 'text-red-400' : 'text-ink-600'}`}>
+          {body.length}/1000
+        </span>
+
+        <div className="flex-1" />
+
+        {/* Cancel */}
+        <button onClick={handleClose} className="text-xs text-ink-500 hover:text-ink-300 px-3 py-2 transition-colors">
+          Cancel
+        </button>
+
+        {/* Post button */}
+        <button onClick={submit}
+          disabled={!body.trim() || loading || body.length > 1000}
+          className={`flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full transition-all ${
+            body.trim() && !loading
+              ? goLive
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-gold-500 text-ink-900 hover:bg-gold-400'
+              : 'bg-ink-700 text-ink-600 cursor-not-allowed'
+          }`}>
+          {loading ? '…' : goLive ? <><Radio size={12} /> Go Live</> : <><Send size={12} /> Post</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
   const [open, setOpen]           = useState(false)
   const [type, setType]           = useState<typeof POST_TYPES[number]>('update')
   const [title, setTitle]         = useState('')
