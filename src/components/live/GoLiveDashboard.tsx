@@ -34,9 +34,36 @@ export default function GoLiveDashboard({ businessSlug, businessId }: Props) {
   const supabase = createClient()
 
   // ── Request camera + mic ─────────────────────────────────────
-  const requestPermissions = async () => {
+ const requestPermissions = async () => {
     setError(null)
     try {
+      // Check if permissions already granted
+      const camPerm = await navigator.permissions.query({ name: 'camera' as PermissionName })
+      const micPerm = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true,
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.muted = true
+      }
+      setPhase('preview')
+    } catch (err: any) {
+      console.error('Camera error:', err.name, err.message)
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Camera access denied. Please allow camera and microphone access in your browser settings and refresh the page.')
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera found on this device.')
+      } else if (err.name === 'NotReadableError') {
+        setError('Camera is in use by another app. Close it and try again.')
+      } else {
+        setError(`Could not access camera: ${err.name} — ${err.message}`)
+      }
+    }
+  }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true,

@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Eye, Star, BarChart2, Shield, Settings, Edit } from 'lucide-react'
+import { Plus, Eye, Star, BarChart2, Shield, Edit } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/components/layout/Navbar'
 import CompletenessBar from '@/components/business/CompletenessBar'
 import GoLiveDashboard from '@/components/live/GoLiveDashboard'
-import { timeAgo } from '@/lib/utils'
 import PaymentSuccessToast from '@/components/ui/PaymentSuccessToast'
+import { timeAgo } from '@/lib/utils'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -30,7 +30,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-ink-900">
       <Navbar />
-<PaymentSuccessToast />
+      <PaymentSuccessToast />
 
       <main className="pt-20 pb-20 max-w-6xl mx-auto px-4 sm:px-6">
 
@@ -49,6 +49,7 @@ export default async function DashboardPage() {
 
         {businesses && businesses.length > 0 ? (
           <div className="space-y-6">
+
             {/* Summary cards */}
             <div className="grid sm:grid-cols-3 gap-4">
               {[
@@ -74,55 +75,65 @@ export default async function DashboardPage() {
             {/* Business list */}
             <div>
               <h2 className="font-display text-lg font-semibold text-white mb-4">Your Businesses</h2>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {businesses.map(biz => (
-                  <div key={biz.id} className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-white">{biz.name}</h3>
-                        {biz.verification_status === 'verified' && (
-                          <Shield size={14} className="text-emerald-400" />
-                        )}
-                        <span className={`badge text-xs ${
-                          biz.verification_status === 'verified' ? 'badge-green' :
-                          biz.verification_status === 'pending' ? 'badge-gold' : 'badge-gray'
-                        }`}>
-                          {biz.verification_status}
-                        </span>
+                  <div key={biz.id} className="space-y-4">
+
+                    {/* Business card */}
+                    <div className="card p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-white">{biz.name}</h3>
+                          {biz.verification_status === 'verified' && (
+                            <Shield size={14} className="text-emerald-400" />
+                          )}
+                          <span className={`badge text-xs ${
+                            biz.verification_status === 'verified' ? 'badge-green' :
+                            biz.verification_status === 'pending' ? 'badge-gold' : 'badge-gray'
+                          }`}>
+                            {biz.verification_status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-ink-400 truncate">{biz.tagline || biz.category}</p>
+                        <div className="flex flex-wrap gap-4 mt-2 text-xs text-ink-500">
+                          <span className="flex items-center gap-1"><Eye size={11} /> {biz.view_count || 0} views</span>
+                          <span className="flex items-center gap-1"><Star size={11} /> {biz.rating_average?.toFixed(1) || '—'} rating</span>
+                          <span suppressHydrationWarning>Listed {timeAgo(biz.created_at)}</span>
+                        </div>
                       </div>
-                      <p className="text-sm text-ink-400 truncate">{biz.tagline || biz.category}</p>
-                      <div className="flex flex-wrap gap-4 mt-2 text-xs text-ink-500">
-                        <span className="flex items-center gap-1"><Eye size={11} /> {biz.view_count || 0} views</span>
-                        <span className="flex items-center gap-1"><Star size={11} /> {biz.rating_average?.toFixed(1) || '—'} rating</span>
-                        <span>Listed {timeAgo(biz.created_at)}</span>
-{businesses?.some(b => b.verification_status === 'verified') && (
-  <GoLiveDashboard businessSlug={biz.slug} businessId={biz.id} />
-)}
+
+                      {/* Completeness */}
+                      <div className="sm:w-40">
+                        <CompletenessBar score={biz.profile_completeness || 0} />
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <Link href={`/business/${biz.slug}`} className="btn-ghost text-xs py-2 px-3">
+                          <Eye size={13} /> View
+                        </Link>
+                        <Link href={`/dashboard/edit/${biz.id}`} className="btn-secondary text-xs py-2 px-3">
+                          <Edit size={13} /> Edit
+                        </Link>
                       </div>
                     </div>
 
-                    {/* Completeness */}
-                    <div className="sm:w-40">
-                      <CompletenessBar score={biz.profile_completeness || 0} />
-                    </div>
+                    {/* Go Live — verified only */}
+                    {biz.verification_status === 'verified' && (
+                      <GoLiveDashboard
+                        businessSlug={biz.slug}
+                        businessId={biz.id}
+                      />
+                    )}
 
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <Link href={`/business/${biz.slug}`} className="btn-ghost text-xs py-2 px-3">
-                        <Eye size={13} /> View
-                      </Link>
-                      <Link href={`/dashboard/edit/${biz.id}`} className="btn-secondary text-xs py-2 px-3">
-                        <Edit size={13} /> Edit
-                      </Link>
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         ) : (
-          /* Empty state */
           <div className="text-center py-20">
             <div className="w-20 h-20 rounded-2xl bg-gold-500/10 flex items-center justify-center mx-auto mb-5">
               <Plus size={32} className="text-gold-400" />
